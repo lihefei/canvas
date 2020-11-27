@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="Generator" content="EditPlus®" />
+        <meta name="Author" content="" />
+        <meta name="Keywords" content="" />
+        <meta name="Description" content="" />
+        <title>Canvas绘制地球雷达直角坐标系统</title>
+        <style>
+            canvas {
+                border: 1px solid #ddd;
+            }
+        </style>
+    </head>
+    <body>
+        <script>
+            // 卫星系统
+            let system = {
+                BDS: {
+                    color: '#E6252E',
+                    data: [],
+                },
+                GPS: {
+                    color: '#E57F25',
+                    data: [],
+                },
+                GLONASS: {
+                    color: '#189945',
+                    data: [],
+                },
+                GALILEO: {
+                    color: '#E625C2',
+                    data: [],
+                },
+                QZSS: {
+                    color: '#13b6f7',
+                    data: [],
+                },
+            };
+
+            //接口数据
+            let responseData = {
+                id: 1802828,
+                mjd: 59177,
+                sod: 34125.0,
+                skydata:
+                    'ABMF@16.262306739,-61.527535285,-25.522,  0.021, -0.014,  0.047,22,9,0,6,7,0,0.000000,1.012541,0.528054,0.747066,-0.642738,01@G02,32.4,-32.3|G05,44.0,-108.4|G06,37.7, 22.4|G09,29.2, 62.0|G12,25.2,-61.4|G13,10.5,-168.1|G17,55.3,109.2|G19,66.3, 78.5|G28,15.6,170.3|R01,69.3, 39.1|R02,39.7,-161.0|R08,24.5, 28.8|R14,10.4,-89.5|R22,10.2,106.7|R23,39.9, 39.2|E02,27.3,-153.0|E03,45.9,-177.9|E05,58.8, 83.5|E09,16.7, 43.2|E15,12.1,-50.6|E30,28.3,-95.5|E36,32.0, 63.4',
+                utc: '2020/11/24 09:28:45',
+            };
+
+            let utcTime = responseData.utc;
+            let type = responseData.skydata.split('@')[0];
+            let xyz = responseData.skydata.split('@')[1];
+            let terminals = responseData.skydata.split('@')[2].split('|');
+
+            for (let k in system) {
+                terminals.forEach((item) => {
+                    let arr = item.split(',');
+                    let title = arr[0],
+                        lat = arr[1],
+                        lng = arr[2];
+
+                    if (getGNSSNameFromPrn(title) === k) {
+                        system[k].data.push({ title, lat, lng });
+                    }
+                });
+            }
+
+            let canvasW = (canvasH = 800);
+            let canvas = document.createElement('canvas');
+            canvas.setAttribute('id', 'Chart');
+            canvas.setAttribute('width', canvasW);
+            canvas.setAttribute('height', canvasH);
+            document.body.appendChild(canvas);
+
+            let center = {
+                x: canvasW / 2,
+                y: canvasH / 2,
+            };
+
+            let ctx = canvas.getContext('2d');
+            //ctx.globalAlpha = 0.5;
+            let radisStep = 90; //同心圆高度
+            let bgRadis = 3 * radisStep; //背景圆半径
+
+            drawRadar(); //绘制雷达图
+            drawGNSS(); //绘制GNSS标识
+            drawTerminal(); //绘制终端
+
+            //绘制雷达图
+            function drawRadar() {
+                ctx.lineWidth = 0.5; //线条尺寸
+                ctx.strokeStyle = 'gray'; //笔触颜色
+
+                //背景圆
+                ctx.beginPath(); //打开绘制路径
+                ctx.fillStyle = '#fff'; //填充颜色
+                ctx.arc(center.x, center.y, bgRadis, 0, 2 * Math.PI);
+                ctx.fill(); //填充
+                ctx.closePath(); //关闭绘制路径
+
+                //同心圆
+                for (let i = 0; i < 4; i++) {
+                    ctx.beginPath(); //打开绘制路径
+                    ctx.arc(center.x, center.y, i * radisStep, 0, 2 * Math.PI); //定义路径参数
+                    ctx.stroke(); //线条
+                    ctx.closePath(); //关闭绘制路径
+                }
+                ctx.save();
+
+                //外部角度刻度
+                ctx.translate(center.x, center.y); //重新定义中心位置
+                ctx.font = 'bold 20px 微软雅黑';
+                ctx.fillStyle = '#666'; //填充颜色
+                for (let i = 0; i < 8; i++) {
+                    let x = Math.sin((45 * i * Math.PI) / 180) * bgRadis,
+                        y = Math.cos((45 * i * Math.PI) / 180) * bgRadis * -1;
+
+                    ctx.beginPath(); //打开绘制路径
+                    ctx.moveTo(0, 0); //起点
+                    ctx.lineTo(x, y); //终点
+                    ctx.stroke(); //线条
+                    let text = 45 * i + '°',
+                        left = x * 1.2 - (text.length * 20) / 5,
+                        top = y * 1.2 + (text.length * 20) / 5;
+                    ctx.fillText(text, left, top); //文字
+                    ctx.closePath(); //关闭绘制路径
+                }
+
+                //内部角度刻度
+                let s = [90, 60, 30];
+                ctx.font = '16px 微软雅黑';
+                s.forEach((item, index) => {
+                    ctx.fillText(
+                        item + '°',
+                        Math.sin((45 * Math.PI) / 180) * radisStep * index - 10,
+                        Math.sin((45 * Math.PI) / 180) * radisStep * index * -1 + 6
+                    ); //-10与+6是调整文字居中
+                });
+            }
+
+            //绘制GNSS标识
+            function drawGNSS() {
+                ctx.translate(0, 0); //重新定义中心位置
+                let index = 0;
+                for (let key in system) {
+                    ctx.save();
+                    let x = -center.x + 30,
+                        y = -center.y + 30;
+                    ctx.translate(x, y); //重新定义中心位置
+                    let left = 0;
+                    let top = index * 30;
+                    let terminalLen = system[key].data.length;
+                    ctx.fillStyle = terminalLen ? system[key].color : '#eee'; //填充颜色
+                    ctx.beginPath(); //打开绘制路径
+
+                    if (key === 'GPS') {
+                        ctx.arc(left, top, 8, 0, 2 * Math.PI);
+                    } else {
+                        let sideOptions = {
+                            GALILEO: 3,
+                            GLONASS: 4,
+                            BDS: 5,
+                            QZSS: 6,
+                        };
+                        let sides = sideOptions[key]; //多边数
+                        createPolygonPath(0, top, 8, sides, Math.PI);
+                    }
+
+                    ctx.fill(); //填充
+                    ctx.stroke(); //线条
+                    ctx.font = '14px 微软雅黑';
+                    ctx.fillStyle = '#666'; //填充文字颜色
+                    ctx.fillText(key + `(${terminalLen})`, 20, index * 30 + 6); //文字
+                    ctx.closePath(); //关闭绘制路径
+                    ctx.restore();
+                    index++;
+                }
+            }
+
+            //绘制终端
+            function drawTerminal() {
+                for (let key in system) {
+                    system[key].data.forEach((item) => {
+                        let { title, lat, lng } = item;
+                        let angle = ((lng < 0 ? lng + 360 : lng) * 2 * Math.PI) / 360;
+                        let radis = ((90 - lat) * bgRadis) / 90;
+
+                        let x = Math.sin(angle) * radis,
+                            y = Math.cos(angle) * radis * -1;
+
+                        ctx.fillStyle = colorToRGB(system[key].color, 0.8);
+
+                        ctx.beginPath();
+                        if (key === 'GPS') {
+                            ctx.arc(x, y, 16, 0, Math.PI * 2, true);
+                        } else {
+                            let sideOptions = {
+                                GALILEO: 3,
+                                GLONASS: 4,
+                                BDS: 5,
+                                QZSS: 6,
+                            };
+                            let sides = sideOptions[key]; //多边数
+                            createPolygonPath(x, y, 16, sides, Math.PI);
+                        }
+
+                        ctx.fill();
+                        ctx.stroke(); //线条
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '10px 微软雅黑';
+                        ctx.fillText(title, x - 10, y + 4); //-10和+4是居中偏移量
+                        ctx.closePath();
+                    });
+                }
+            }
+
+            //多边形路径
+            function createPolygonPath(centerX, centerY, radius, sides, startAngle) {
+                let points = [],
+                    angle = startAngle || 0;
+
+                for (let i = 0; i < sides + 2; i++) {
+                    let x = centerX + radius * Math.sin(angle);
+                    let y = centerY + radius * Math.cos(angle);
+
+                    ctx[i ? 'lineTo' : 'moveTo'](x, y);
+                    i && (angle += (2 * Math.PI) / sides);
+                }
+            }
+
+            //根据终端名称获取GNSS系统信息
+            function getGNSSNameFromPrn(prn) {
+                let options = {
+                    C: 'BDS',
+                    G: 'GPS',
+                    R: 'GLONASS',
+                    E: 'GALILEO',
+                    J: 'QZSS',
+                };
+                let type = prn.substring(0, 1);
+                return options[type];
+            }
+
+            //根据GNSS系统名称获取信息
+            function getGNSSInfoFromName(name) {
+                for (let key in system) {
+                    if (key === name) {
+                        return system[key];
+                    }
+                }
+            }
+
+            //16进制颜色转RGB
+            function colorToRGB(val, opa) {
+                const pattern = /^(#?)[a-fA-F0-9]{6}$/; //16进制颜色值校验规则
+                const flag = typeof opa == 'number'; //判断是否有设置不透明度
+
+                if (!pattern.test(val)) {
+                    //如果值不符合规则返回空字符
+                    return '';
+                }
+
+                let v = val.replace(/#/, ''); //如果有#号先去除#号
+                let rgbArr = [];
+                let rgbStr = '';
+
+                for (let i = 0; i < 3; i++) {
+                    let item = v.substring(i * 2, i * 2 + 2);
+                    let num = parseInt(item, 16);
+                    rgbArr.push(num);
+                }
+
+                rgbStr = rgbArr.join();
+                rgbStr = 'rgb' + (flag ? 'a' : '') + '(' + rgbStr + (flag ? ',' + opa : '') + ')';
+                return rgbStr;
+            }
+        </script>
+    </body>
+</html>
