@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="Generator" content="EditPlus®" />
+        <meta name="Author" content="" />
+        <meta name="Keywords" content="" />
+        <meta name="Description" content="" />
+        <title>Canvas绘制地球靶心直角坐标系统</title>
+        <style>
+            canvas {
+                border: 1px solid #ddd;
+                width: 800px;
+                height: 400px;
+            }
+            .pop {
+                display: none;
+                position: absolute;
+                left: -10px;
+                top: -10px;
+                padding: 4px 8px;
+                border-radius: 2px;
+                font-size: 14px;
+                color: #fff;
+                background-color: rgba(0, 0, 0, 0.5);
+            }
+        </style>
+    </head>
+    <body>
+        <span class="pop" id="Pop"></span>
+        <canvas id="Chart"></canvas>
+        <script>
+            let canvasW = 1600,
+                canvasH = 800;
+
+            let canvas = document.querySelector('#Chart');
+            canvas.setAttribute('width', canvasW);
+            canvas.setAttribute('height', canvasH);
+
+            let canvasCssW = canvasW / 2;
+            let canvasCssH = canvasH / 2;
+            canvas.style.cssText = `width:${canvasCssW}px; height: ${canvasCssH}px;`;
+
+            let ctx = canvas.getContext('2d');
+
+            canvas.addEventListener('mousemove', (e) => {
+                let { x, y } = getLocation(e.clientX, e.clientY);
+                showPop(x, y);
+            });
+
+            function showPop(x, y) {
+                let Pop = document.querySelector('#Pop');
+                Pop.innerHTML = `X: ${x}，Y: ${x}`;
+
+                let wDpr = canvasCssW / canvasW; //计算宽度像素缩放比
+                let hDpr = canvasCssH / canvasH; //计算高度像素缩放比
+                Pop.style.cssText = `display: block; left: ${x * wDpr + 20}px; top: ${y * hDpr + 20}px;`;
+            }
+
+            function getLocation(x, y) {
+                let bcr = canvas.getBoundingClientRect();
+
+                //此处不用x: (x - bcr.left), y: (y - bcr.top)是为了防止使用CSS和JS改变了canvas的高宽之后
+                //表面积拉大而实际显示像素不变而造成的坐标获取不准的情况
+                return {
+                    x: (x - bcr.left) * (canvas.width / bcr.width),
+                    y: (y - bcr.top) * (canvas.height / bcr.height),
+                };
+            }
+        </script>
+    </body>
+</html>
